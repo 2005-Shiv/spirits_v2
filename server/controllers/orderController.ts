@@ -60,6 +60,24 @@ export const createOrder = async (req: Request, res: Response) => {
         },
     });
 
+    // Decrease stock (Model A: admin-only stock control, decremented at order creation)
+    for (const item of orderItems) {
+        await prisma.product.update({
+            where: { id: item.product },
+            data: { stock: { decrement: item.quantity } },
+        });
+    }
+
+    // Send stock update events (non-fatal: Inngest may not be configured in mock mode)
+    try {
+        for (const item of orderItems) {
+            await inngest.send({ name: "inventory/stock.updated", data: { productId: item.product } });
+        }
+        await inngest.send({ name: "order/placed", data: { orderId: order.id } });
+    } catch (error: any) {
+        console.warn("Inngest event failed (non-fatal):", error.message);
+    }
+
     if (paymentMethod === "card") {
         const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
 
@@ -82,25 +100,10 @@ export const createOrder = async (req: Request, res: Response) => {
             mode: "payment",
             metadata: { orderId: order.id },
         });
-        return res.json({ url: session.url });
+        return res.json({ url: session.url, order });
     }
 
     res.json({ order });
-
-    // Decrease stock
-    for (const item of orderItems) {
-        await prisma.product.update({
-            where: { id: item.product },
-            data: { stock: { decrement: item.quantity } },
-        });
-    }
-
-    // Send stock update events for each product in the order
-    for (const item of orderItems) {
-        await inngest.send({ name: "inventory/stock.updated", data: { productId: item.product } });
-    }
-
-    await inngest.send({ name: "order/placed", data: { orderId: order.id } });
 };
 
 // Get user's orders
