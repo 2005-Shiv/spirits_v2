@@ -45,9 +45,34 @@
 21. Built Delivery Partner flow: GET /api/delivery/available, PUT /api/delivery/orders/:id/accept, GET /api/delivery/orders/:id/qr ✅
 22. Tested full DP flow: Login → Available → Accept (OTP: 750224) → Out for Delivery → QR → Complete (OTP verify) → Delivered ✅
 
+### Admin Stock Management (Model A)
+23. Built Super Admin stock management APIs:
+   - GET /api/admin/stores/:storeId/inventory - view store inventory ✅
+   - PUT /api/admin/stock - modify stock with InventoryLedger audit ✅
+   - GET /api/admin/inventory-ledger - audit trail ✅
+   
+   **Admin auth configuration**: ADMIN_EMAILS must include the user's email at registration time. Existing users registered before ADMIN_EMAILS was added need their email included in ADMIN_EMAILS. New users will have admin status computed correctly at registration.
+
 ### Next Immediate Steps
-1. Build Super Admin stock management (Model A - admin modifies stock, InventoryLedger audit)
-2. Build frontend interfaces for all 4 roles (Customer, DP, Store Operator, Super Admin)
+1. Build frontend interfaces for all 4 roles (Customer, DP, Store Operator, Super Admin)
+2. Fix admin email configuration: ensure ADMIN_EMAILS includes emails of users who should have admin privileges
+3. Consider adding a seeded admin user via script for development
+
+### Current State
+- Backend running: `http://localhost:5000` ✅
+- Database: Neon PostgreSQL ✅
+- 27 products seeded ✅
+- 3 Jaipur dark stores seeded ✅
+- 81 store inventory entries seeded ✅
+- 1 StoreOperator seeded ✅
+- 1 Admin user (newadmin@spirits.in) ✅
+- Order creation with store assignment ✅
+- Store API routes ✅
+- StoreOperator auth ✅
+- .env configured ✅
+- Documentation: PRD.md, ARCHITECTURE.md, ROADMAP.md, DECISIONS.md, SESSION.md created ✅
+- Full DP flow tested end-to-end ✅
+- Inventory ledger audit trail working ✅ (Customer, DP, Store Operator, Super Admin)
 
 ### Current State
 - Backend running: `http://localhost:5000` ✅
