@@ -2,6 +2,15 @@ import { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { prisma } from "../config/prisma.js";
 
+// Type extension for Request with operator
+declare global {
+  namespace Express {
+    interface Request {
+      operator: any;
+    }
+  }
+}
+
 const storeOperatorAuth = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const authHeader = req.headers.authorization;

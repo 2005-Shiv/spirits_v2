@@ -29,6 +29,11 @@ const ProductPage = () => {
   const [loading, setLoading] = useState(true);
   const [localQuantity, setLocalQuantity] = useState(1);
 
+  const getProductId = (item: Product | null | undefined) => {
+    if (!item) return "";
+    return (item as any).id ?? (item as any)._id ?? "";
+  };
+
   useEffect(() => {
     setLoading(true);
     setLocalQuantity(1);
@@ -41,7 +46,9 @@ const ProductPage = () => {
         return api.get(`/products?category=${data.product.category}`);
       })
       .then(({ data }) => {
-        setRelatedProducts(data.products.filter((p: Product) => p.id !== id));
+        setRelatedProducts(
+          data.products.filter((p: Product) => getProductId(p) !== id)
+        );
       })
       .catch(() => navigate("/products"))
       .finally(() => setLoading(false));
@@ -50,22 +57,24 @@ const ProductPage = () => {
   if (loading) return <Loading />;
   if (!product) return null;
 
-  const cartItem = items.find((item) => item.product.id === product.id);
+  const cartItem = items.find(
+    (item) => getProductId(item.product) === getProductId(product)
+  );
   const inCart = !!cartItem;
   const displayQuantity = inCart ? cartItem.quantity : localQuantity;
 
   const handleMinus = () => {
     if (inCart) {
       if (cartItem.quantity > 1)
-        updateQuantity(product.id, cartItem.quantity - 1);
-      else removeFromCart(product.id);
+        updateQuantity(getProductId(product), cartItem.quantity - 1);
+      else removeFromCart(getProductId(product));
     } else {
       setLocalQuantity(Math.max(1, localQuantity - 1));
     }
   };
 
   const handlePlus = () => {
-    if (inCart) updateQuantity(product.id, cartItem.quantity + 1);
+    if (inCart) updateQuantity(getProductId(product), cartItem.quantity + 1);
     else setLocalQuantity(localQuantity + 1);
   };
 
@@ -260,7 +269,7 @@ const ProductPage = () => {
 
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 xl:gap-8">
               {relatedProducts.slice(0, 5).map((rp) => (
-                <ProductCard key={rp.id} product={rp} />
+                <ProductCard key={getProductId(rp)} product={rp} />
               ))}
             </div>
           </section>

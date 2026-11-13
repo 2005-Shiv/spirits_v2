@@ -108,7 +108,7 @@ export const getStoreInventory = async (req: Request, res: Response) => {
     const { storeId } = req.params;
 
     const inventory = await prisma.storeInventory.findMany({
-        where: { storeId },
+        where: { storeId: storeId as string },
         include: {
             product: {
                 select: { id: true, name: true, price: true, category: true, image: true },

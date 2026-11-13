@@ -13,7 +13,7 @@ function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
     return R * c;
 }
 
-// GET /api/stores — List all active dark stores
+// GET /api/stores â€” List all active dark stores
 export const getStores = async (req: Request, res: Response) => {
     try {
         const stores = await prisma.store.findMany({
@@ -31,10 +31,10 @@ export const getStores = async (req: Request, res: Response) => {
     }
 };
 
-// GET /api/store/orders — Store Operator: view orders for their store
+// GET /api/store/orders â€” Store Operator: view orders for their store
 export const getStoreOrders = async (req: Request, res: Response) => {
     try {
-        const storeId = req.operator!.storeId;
+        const storeId = (req.operator as any).storeId;
         const { status } = req.query;
 
         const where: any = { storeId };
@@ -57,15 +57,16 @@ export const getStoreOrders = async (req: Request, res: Response) => {
     }
 };
 
-// PUT /api/store/orders/:id/ready — Mark order ready for dispatch
+// PUT /api/store/orders/:id/ready â€” Mark order ready for dispatch
 export const markOrderReady = async (req: Request, res: Response) => {
     try {
-        const storeId = req.operator!.storeId;
+        const storeId = (req.operator as any).storeId;
         const orderId = req.params.id;
 
         const order = await prisma.order.findFirst({
-            where: { id: orderId, storeId },
+            where: { id: orderId as string},
         });
+
 
         if (!order) {
             return res.status(404).json({ message: "Order not found for this store" });
@@ -80,7 +81,7 @@ export const markOrderReady = async (req: Request, res: Response) => {
         history.push({ status: "Ready", note: "Order ready for dispatch", timestamp: new Date() });
 
         const updatedOrder = await prisma.order.update({
-            where: { id: orderId },
+            where: { id: orderId as string },
             data: { status: "Ready", statusHistory: history },
             include: {
                 user: { select: { name: true, email: true, phone: true } },
@@ -94,7 +95,7 @@ export const markOrderReady = async (req: Request, res: Response) => {
     }
 };
 
-// GET /api/stores/nearest — Find nearest store based on user lat/lng
+// GET /api/stores/nearest â€” Find nearest store based on user lat/lng
 export const getNearestStore = async (req: Request, res: Response) => {
     try {
         const { lat, lng } = req.query;

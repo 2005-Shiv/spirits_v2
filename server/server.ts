@@ -4,6 +4,7 @@ import cors from "cors";
 import authRouter from "./routes/authRoutes.js";
 import productRouter from "./routes/productRoutes.js";
 import uploadRouter from "./routes/uploadRoutes.js";
+import cartRouter from "./routes/cartRoutes.js";
 import orderRouter from "./routes/orderRoutes.js";
 import { serve } from "inngest/express";
 import { inngest, functions } from "./inngest/index.js";
@@ -39,6 +40,7 @@ app.use("/api/addresses", addressRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/delivery", deliveryPartnerRouter);
 app.use("/api/stores", storeRouter);
+app.use("/api/cart", cartRouter);
 
 // Error handling
 app.use((error: any, req: Request, res: Response, next: NextFunction) => {
@@ -49,3 +51,4 @@ app.use((error: any, req: Request, res: Response, next: NextFunction) => {
 app.listen(port, () => {
   console.log(`Server is running at http://localhost:${port}`);
 });
+

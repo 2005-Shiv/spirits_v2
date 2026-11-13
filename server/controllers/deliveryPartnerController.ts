@@ -177,7 +177,7 @@ export const getAvailableDeliveries = async (req: Request, res: Response) => {
 // Accept a delivery request
 // PUT /api/delivery/orders/:id/accept
 export const acceptDelivery = async (req: Request, res: Response) => {
-    const orderId = req.params.id;
+    const orderId = req.params.id as string;
     const partnerId = req.partner!.id;
 
     const order = await prisma.order.findFirst({
@@ -217,7 +217,7 @@ export const acceptDelivery = async (req: Request, res: Response) => {
 // Generate QR code for handover
 // GET /api/delivery/orders/:id/qr
 export const getHandoverQR = async (req: Request, res: Response) => {
-    const orderId = req.params.id;
+    const orderId = req.params.id as string;
 
     const order = await prisma.order.findFirst({
         where: { id: orderId, deliveryPartnerId: req.partner!.id },

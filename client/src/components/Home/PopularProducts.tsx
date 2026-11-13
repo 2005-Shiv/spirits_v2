@@ -15,7 +15,7 @@ const PopularProducts = () => {
     api
       .get("/products?sort=rating")
       .then(({ data }) => {
-        setProducts(data.products);
+        setProducts(data.products || []);
       })
       .catch((error: any) => {
         toast.error(error.response.data.message || error?.message);
@@ -43,7 +43,7 @@ const PopularProducts = () => {
         {products.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 xl:gap-8">
             {products.slice(0, 10).map((product) => (
-              <ProductCard key={product.id} product={product} />
+              <ProductCard key={product._id} product={product} />
             ))}
           </div>
         ) : (
