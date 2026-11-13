@@ -51,6 +51,9 @@ model Product {
     reviewCount   Int?     @default(0)
     createdAt     DateTime @default(now())
     updatedAt     DateTime @updatedAt
+
+    storeInventory   StoreInventory[]
+    inventoryLedger  InventoryLedger[]
 }
 
 model Order {
@@ -66,6 +69,9 @@ model Order {
     total           Float
     status          String @default("Placed")
     statusHistory   Json
+
+    storeId         String?
+    store           Store?    @relation(fields: [storeId], references: [id], onDelete: SetNull)
 
     deliveryPartnerId String?
     deliveryPartner   DeliveryPartner? @relation(fields: [deliveryPartnerId], references: [id], onDelete: SetNull)
@@ -89,4 +95,67 @@ model DeliveryPartner {
     orders      Order[]
     createdAt   DateTime @default(now())
     updatedAt   DateTime @updatedAt
+}
+
+// =============================================================================
+// Dark Store Infrastructure (Company-owned, Jaipur only)
+// =============================================================================
+
+model Store {
+    id          String   @id @default(uuid())
+    name        String
+    address     String
+    city        String   @default("Jaipur")
+    lat         Float
+    lng         Float
+    h3Cell      String   // H3 grid cell for geographical allocation
+    isActive    Boolean  @default(true)
+    openingHours String? @default("09:00-22:00")
+    storeOperators StoreOperator[]
+    inventory   StoreInventory[]
+    orders      Order[]
+    inventoryLedger InventoryLedger[]
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+}
+
+model StoreOperator {
+    id        String   @id @default(uuid())
+    storeId   String
+    store     Store    @relation(fields: [storeId], references: [id])
+    name      String
+    email     String   @unique
+    password  String
+    phone     String?
+    isActive  Boolean  @default(true)
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+}
+
+model StoreInventory {
+    id        String   @id @default(uuid())
+    storeId   String
+    store     Store    @relation(fields: [storeId], references: [id])
+    productId String
+    product   Product  @relation(fields: [productId], references: [id])
+    quantity  Int      @default(0)   // physical stock on shelf
+    reserved  Int      @default(0)   // stock reserved for pending orders
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@unique([storeId, productId])
+}
+
+model InventoryLedger {
+    id             String   @id @default(uuid())
+    storeId        String
+    store          Store    @relation(fields: [storeId], references: [id])
+    productId      String
+    product        Product  @relation(fields: [productId], references: [id])
+    changeType     String   // RECEIVE | DAMAGE | EXPIRE | RECONCILE | ADJUST
+    quantity       Int      // positive = added, negative = removed
+    changedBy      String   // admin userId who made the change
+    reason         String?
+    referenceOrder String?  // orderId if related to an order
+    createdAt      DateTime @default(now())
 }

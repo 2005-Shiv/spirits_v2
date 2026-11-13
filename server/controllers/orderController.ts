@@ -3,28 +3,66 @@ import { prisma } from "../config/prisma.js";
 import { inngest } from "../inngest/index.js";
 import Stripe from "stripe";
 
+// Haversine distance in km between two lat/lng points
+function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+    const R = 6371;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLng = ((lng2 - lng1) * Math.PI) / 180;
+    const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
+
 // Create order
 // POST /api/orders
 export const createOrder = async (req: Request, res: Response) => {
     const { items, shippingAddress, paymentMethod } = req.body;
 
-    // Check if order items are empty
     if (!items || items.length === 0) {
         return res.status(400).json({ message: "No order items" });
     }
 
-    // Look up actual prices from the database
+    const userLat = shippingAddress?.lat;
+    const userLng = shippingAddress?.lng;
+
+    if (userLat == null || userLng == null) {
+        return res.status(400).json({ message: "Delivery location coordinates are required" });
+    }
+
+    const stores = await prisma.store.findMany({ where: { isActive: true } });
+    if (stores.length === 0) {
+        return res.status(500).json({ message: "No active stores available" });
+    }
+
+    const storesWithDistance = stores.map((s) => ({
+        ...s,
+        distanceKm: haversineDistance(Number(userLat), Number(userLng), s.lat, s.lng),
+    }));
+
+    storesWithDistance.sort((a, b) => a.distanceKm - b.distanceKm);
+    const nearestStore = storesWithDistance[0];
+
     const productIds = items.map((i: any) => i.product);
     const products = await prisma.product.findMany({ where: { id: { in: productIds } } });
     const productMap: Record<string, (typeof products)[0]> = {};
-
     products.forEach((p: any) => (productMap[p.id] = p));
 
-    // Check if product is in stock
     for (const item of items) {
         const product = productMap[item.product];
-        if (!product || (product.stock ?? 0) < item.quantity) {
-            return res.status(404).json({ message: "Product out of stock" });
+        if (!product) {
+            return res.status(404).json({ message: `Product ${item.product} not found` });
+        }
+
+        const storeInventory = await prisma.storeInventory.findUnique({
+            where: { storeId_productId: { storeId: nearestStore.id, productId: product.id } },
+        });
+
+        if (!storeInventory || storeInventory.quantity < item.quantity) {
+            return res.status(404).json({
+                message: `Product "${product.name}" out of stock at ${nearestStore.name}`,
+            });
         }
     }
 
@@ -49,6 +87,7 @@ export const createOrder = async (req: Request, res: Response) => {
     const order = await prisma.order.create({
         data: {
             userId: req.user!.id,
+            storeId: nearestStore.id,
             items: orderItems,
             shippingAddress,
             paymentMethod,
@@ -60,15 +99,25 @@ export const createOrder = async (req: Request, res: Response) => {
         },
     });
 
-    // Decrease stock (Model A: admin-only stock control, decremented at order creation)
     for (const item of orderItems) {
-        await prisma.product.update({
-            where: { id: item.product },
-            data: { stock: { decrement: item.quantity } },
+        await prisma.storeInventory.update({
+            where: { storeId_productId: { storeId: nearestStore.id, productId: item.product } },
+            data: { quantity: { decrement: item.quantity } },
+        });
+
+        await prisma.inventoryLedger.create({
+            data: {
+                storeId: nearestStore.id,
+                productId: item.product,
+                changeType: "ADJUST",
+                quantity: -item.quantity,
+                changedBy: req.user!.id,
+                reason: `Order ${order.id} placed`,
+                referenceOrder: order.id,
+            },
         });
     }
 
-    // Send stock update events (non-fatal: Inngest may not be configured in mock mode)
     try {
         for (const item of orderItems) {
             await inngest.send({ name: "inventory/stock.updated", data: { productId: item.product } });
@@ -81,7 +130,6 @@ export const createOrder = async (req: Request, res: Response) => {
     if (paymentMethod === "card") {
         const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
 
-        // create session
         const session = await stripe.checkout.sessions.create({
             success_url: `${req.headers.origin}/orders?clearCart=true`,
             cancel_url: `${req.headers.origin}/checkout`,
@@ -89,9 +137,7 @@ export const createOrder = async (req: Request, res: Response) => {
                 {
                     price_data: {
                         currency: "usd",
-                        product_data: {
-                            name: "Payment Groceries",
-                        },
+                        product_data: { name: "Payment Groceries" },
                         unit_amount: Math.round(total * 100),
                     },
                     quantity: 1,
@@ -100,10 +146,10 @@ export const createOrder = async (req: Request, res: Response) => {
             mode: "payment",
             metadata: { orderId: order.id },
         });
-        return res.json({ url: session.url, order });
+        return res.json({ url: session.url, order, nearestStore });
     }
 
-    res.json({ order });
+    res.json({ order, nearestStore });
 };
 
 // Get user's orders

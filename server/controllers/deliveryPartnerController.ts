@@ -156,6 +156,91 @@ export const updateDeliveryStatus = async (req: Request, res: Response) => {
     res.json({ order: updatedOrder });
 };
 
+// Get available delivery requests (Ready status, no DP assigned)
+// GET /api/delivery/available
+export const getAvailableDeliveries = async (req: Request, res: Response) => {
+    const orders = await prisma.order.findMany({
+        where: {
+            status: "Ready",
+            deliveryPartnerId: null,
+        },
+        include: {
+            user: { select: { name: true, email: true, phone: true } },
+            store: { select: { name: true, address: true } },
+        },
+        orderBy: { createdAt: "asc" },
+    });
+
+    res.json({ orders });
+};
+
+// Accept a delivery request
+// PUT /api/delivery/orders/:id/accept
+export const acceptDelivery = async (req: Request, res: Response) => {
+    const orderId = req.params.id;
+    const partnerId = req.partner!.id;
+
+    const order = await prisma.order.findFirst({
+        where: { id: orderId, status: "Ready", deliveryPartnerId: null },
+    });
+
+    if (!order) {
+        return res.status(404).json({ message: "Delivery request not found or already accepted" });
+    }
+
+    const otp = String(Math.floor(100000 + Math.random() * 900000));
+
+    const history = (Array.isArray(order.statusHistory) ? order.statusHistory : []) as any[];
+    history.push({
+        status: "Assigned",
+        note: `Assigned to delivery partner ${req.partner!.name}`,
+        timestamp: new Date(),
+    });
+
+    const updatedOrder = await prisma.order.update({
+        where: { id: orderId },
+        data: {
+            deliveryPartnerId: partnerId,
+            deliveryOtp: otp,
+            status: "Assigned",
+            statusHistory: history,
+        },
+        include: {
+            user: { select: { name: true, email: true, phone: true } },
+            store: { select: { name: true, address: true } },
+        },
+    });
+
+    res.json({ order: updatedOrder, otp, message: "Delivery request accepted" });
+};
+
+// Generate QR code for handover
+// GET /api/delivery/orders/:id/qr
+export const getHandoverQR = async (req: Request, res: Response) => {
+    const orderId = req.params.id;
+
+    const order = await prisma.order.findFirst({
+        where: { id: orderId, deliveryPartnerId: req.partner!.id },
+    });
+
+    if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+    }
+
+    if (order.status !== "Out for Delivery") {
+        return res.status(400).json({ message: "Order is not out for delivery yet" });
+    }
+
+    const qrData = JSON.stringify({
+        orderId: order.id,
+        otp: order.deliveryOtp,
+        partnerId: req.partner!.id,
+        timestamp: new Date().toISOString(),
+    });
+
+    res.json({ qrData, orderId, otp: order.deliveryOtp });
+};
+
 // Update live location
 // PUT /api/delivery/my-deliveries/:id/location
 export const updateLocation = async (req: Request, res: Response) => {

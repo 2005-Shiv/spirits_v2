@@ -400,6 +400,84 @@ const seedDB = async () => {
     await prisma.product.createMany({ data: products });
     console.log(`Created ${products.length} products`);
 
+    // =============================================================================
+    // Seed Dark Stores (Jaipur only) + Store-Specific Inventory
+    // =============================================================================
+    const stores = await prisma.store.createMany({
+        data: [
+            {
+                name: "Spirits Dark Store - Malviya Nagar",
+                address: "Main Road, Malviya Nagar, Jaipur, Rajasthan 302017",
+                city: "Jaipur",
+                lat: 26.8566,
+                lng: 75.7939,
+                h3Cell: "8928308280fffff",
+                isActive: true,
+                openingHours: "09:00-22:00",
+            },
+            {
+                name: "Spirits Dark Store - C-Scheme",
+                address: "Station Road, C-Scheme, Jaipur, Rajasthan 302001",
+                city: "Jaipur",
+                lat: 26.9124,
+                lng: 75.7873,
+                h3Cell: "8928308281fffff",
+                isActive: true,
+                openingHours: "08:00-23:00",
+            },
+            {
+                name: "Spirits Dark Store - Vaishali Nagar",
+                address: "Tonk Road, Vaishali Nagar, Jaipur, Rajasthan 302021",
+                city: "Jaipur",
+                lat: 26.9477,
+                lng: 75.7659,
+                h3Cell: "8928308282fffff",
+                isActive: true,
+                openingHours: "10:00-21:00",
+            },
+        ],
+    });
+    console.log(`Created ${stores.count} dark stores`);
+
+    const createdStores = await prisma.store.findMany();
+    const allProducts = await prisma.product.findMany();
+
+    // Create store-specific inventory for each product at each store
+    const inventoryEntries = [];
+    for (const store of createdStores) {
+        for (const product of allProducts) {
+            // Vary stock per store for realism
+            const baseStock = Math.floor(Math.random() * 50) + 10; // 10-60 units
+            inventoryEntries.push({
+                storeId: store.id,
+                productId: product.id,
+                quantity: baseStock,
+                reserved: 0,
+            });
+        }
+    }
+
+    await prisma.storeInventory.createMany({ data: inventoryEntries });
+    console.log(`Created ${inventoryEntries.length} store inventory entries`);
+
+    // Create a test StoreOperator for C-Scheme store
+    const cSchemeStore = createdStores.find((s) => s.name.includes("C-Scheme"));
+    if (cSchemeStore) {
+        const bcrypt = await import("bcrypt");
+        const hashedPassword = await bcrypt.default.hash("operator123", 10);
+        await prisma.storeOperator.create({
+            data: {
+                storeId: cSchemeStore.id,
+                name: "Rajesh Kumar",
+                email: "operator@spirits.in",
+                password: hashedPassword,
+                phone: "+91-9876543210",
+                isActive: true,
+            },
+        });
+        console.log(`Created StoreOperator for ${cSchemeStore.name}`);
+    }
+
     console.log("Seed completed successfully!");
     process.exit(0);
   } catch (error) {

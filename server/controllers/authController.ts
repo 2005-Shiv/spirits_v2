@@ -15,6 +15,34 @@ const getAdminStatus = (email: string | null | undefined): boolean => {
     return adminEmails.includes(email.toLowerCase());
 };
 
+// Register Store Operator
+// POST /api/auth/store-operator/register
+export const storeOperatorRegister = async (req: Request, res: Response) => {
+    const { name, email, password, phone, storeId } = req.body;
+
+    if (!name || !email || !password || !storeId) {
+        return res.status(400).json({ message : "Please provide all fields" });
+    }
+
+    const existingOperator = await prisma.storeOperator.findUnique({ where: { email: email.toLowerCase() } });
+    if (existingOperator) {
+        return res.status(400).json({ message: "Store operator already exists with this email" });
+    }
+
+    const store = await prisma.store.findUnique({ where: { id: storeId } });
+    if (!store) {
+        return res.status(404).json({ message: "Store not found" });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const operator = await prisma.storeOperator.create({
+        data: { name, email: email.toLowerCase(), password: hashedPassword, phone, storeId },
+    });
+
+    res.status(201).json({ operator: { id: operator.id, name: operator.name, email: operator.email, storeId: operator.storeId } });
+};
+
 // Register
 // POST /api/auth/register
 export const register = async (req: Request, res: Response) => {
@@ -45,6 +73,44 @@ export const register = async (req: Request, res: Response) => {
     res.status(201).json({ user: userData, token });
 };
 
+// Login Store Operator
+// POST /api/auth/store-operator/login
+export const storeOperatorLogin = async (req: Request, res: Response) => {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+        return res.status(400).json({ message: "Please provide email and password" });
+    }
+
+    const operator = await prisma.storeOperator.findUnique({
+        where: { email: email.toLowerCase() },
+        include: { store: true },
+    });
+
+    if (!operator) {
+        return res.status(401).json({ message: "Invalid email or password" });
+    }
+
+    if (!operator.isActive) {
+        return res.status(403).json({ message: "Your account has been deactivated" });
+    }
+
+    const isMatch = await bcrypt.compare(password, operator.password);
+    if (!isMatch) {
+        return res.status(401).json({ message: "Invalid email or password" });
+    }
+
+    const token = jwt.sign(
+        { id: operator.id, role: "store_operator", storeId: operator.storeId },
+        process.env.JWT_SECRET as string,
+        { expiresIn: "30d" }
+    );
+
+    const { password: _, ...operatorData } = operator;
+
+    res.json({ operator: operatorData, token });
+};
+
 // Login
 // POST /api/auth/login
 export const login = async (req: Request, res: Response) => {
@@ -73,3 +139,5 @@ export const login = async (req: Request, res: Response) => {
 
     res.json({ user: userData, token });
 };
+
+
